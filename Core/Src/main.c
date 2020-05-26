@@ -39,8 +39,7 @@
  HID_KEYBD_Info_TypeDef *k_pinfo;
  HAL_StatusTypeDef status;
 
- uint8_t data[10];
-
+ uint8_t RxBuffer[1] = {0};
 
 
 
@@ -74,6 +73,7 @@ void MX_USB_HOST_Process(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+
 /* USER CODE END 0 */
 
 /**
@@ -83,6 +83,7 @@ void MX_USB_HOST_Process(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
+	uint8_t sendJoyData_flag = 0;
 
   /* USER CODE END 1 */
 
@@ -104,10 +105,15 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_USB_HOST_Init();
   MX_USART2_UART_Init();
-  /* USER CODE BEGIN 2 */
+  MX_USB_HOST_Init();
   initKeyboard(&huart2);
+
+
+  /* USER CODE BEGIN 2 */
+
+
+
 
 
   /* USER CODE END 2 */
@@ -141,23 +147,36 @@ Y                   ; delta y as twos complement integer
 	 mouse[2] = usb->mouse->y;
 
 	 HAL_UART_Transmit(&huart2, mouse, 3, 100);
-	 HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
  }
 
 
  if(usb->keyboard!=NULL)
  {
 	 processKbd(usb->keyboard,&huart2);
-	 HAL_GPIO_TogglePin(LED2_GPIO_Port, LED2_Pin);
  }
 
+ uint8_t buffer[1]={0};
+//HAL_UART_Receive(&huart2,buffer, 1, 1);
+
+if (buffer[0]==0x15)
+{
+	HAL_GPIO_TogglePin(LED2_GPIO_Port, LED2_Pin);
+}
+
+if (buffer[0]==0x16)
+{
+	HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
+}
 
 
 
 
   }
   /* USER CODE END 3 */
+
+
 }
+
 
 
 
@@ -175,7 +194,7 @@ void SystemClock_Config(void)
   /** Configure the main internal regulator output voltage 
   */
   __HAL_RCC_PWR_CLK_ENABLE();
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
+  //__HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
   /** Initializes the CPU, AHB and APB busses clocks 
   */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;

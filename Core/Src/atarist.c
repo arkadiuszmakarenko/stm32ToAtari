@@ -358,12 +358,78 @@ uint8_t mapUSBtoAtari(uint8_t keycode)
 
 
 
+void send_keysToAtari(uint8_t key, uint8_t isPress)
+{
+	uint8_t array[1] = {0};
+
+	if (isPress==0)
+	{
+		array[0]= key|0x80;
+	}
+	else
+	{
+		array[0]= key;
+	}
+
+	HAL_UART_Transmit(uart, array, 1, 100);
+}
+
+
 void processKbd(HID_KEYBD_Info_TypeDef *keyboard)
 {
 	int i = 0;
 	int j = 0;
 	static keyboard_code_t prevkeycode = {0};
 	uint8_t atarikeycode = 0;
+
+
+	// LEFT SHIFT
+	if (prevkeycode.lshift != keyboard->lshift)  //check if button was pressed before, and enter statement if state changed only.
+	{
+		prevkeycode.lshift = keyboard->lshift;
+		send_keysToAtari(0x2A, keyboard->lshift); //send Left Shift code in pressed/depressed
+	}
+
+	// LEFT ALT
+	if (prevkeycode.lalt != keyboard->lalt)
+	{
+		prevkeycode.lalt = keyboard->lalt;
+		send_keysToAtari(0x38, keyboard->lalt);
+	}
+
+	// LEFT CTRL
+	if (prevkeycode.lctrl != keyboard->lctrl)
+	{
+		prevkeycode.lctrl = keyboard->lctrl;
+		send_keysToAtari(0x1D, keyboard->lctrl);
+
+	}
+
+
+	// ----------------------------------------------- RIGHT
+	// RIGHT SHIFT
+	if (prevkeycode.rshift != keyboard->rshift)
+	{
+		prevkeycode.rshift = keyboard->rshift;
+		send_keysToAtari(0x36, keyboard->rshift);
+	}
+
+	// RIGHT ALT
+	if (prevkeycode.ralt != keyboard->ralt)
+	{
+		prevkeycode.ralt = keyboard->ralt;
+		send_keysToAtari(0x38, keyboard->ralt);
+	}
+
+	// RIGHT CTRL
+	if (prevkeycode.rctrl != keyboard->rctrl)
+	{
+		prevkeycode.rctrl = keyboard->rctrl;
+		send_keysToAtari(0x1D, keyboard->rctrl);
+	}
+
+
+
 
 	// Send all pressed key
 		uint8_t keysToPress[KEY_PRESSED_MAX] = {0};
@@ -454,12 +520,3 @@ void processKbd(HID_KEYBD_Info_TypeDef *keyboard)
 
 
 
-void send_keysToAtari(uint8_t key, uint8_t isPress)
-{
-	if (isPress==0)
-	{
-		key = key|0x80;
-	}
-
-	HAL_UART_Transmit(uart, key, 1, 100);
-}
