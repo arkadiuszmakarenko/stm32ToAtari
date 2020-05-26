@@ -21,6 +21,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "usb_host.h"
+#include "atarist.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -36,6 +37,9 @@
 /* USER CODE BEGIN PD */
  HID_USBDevicesTypeDef* usb;
  HID_KEYBD_Info_TypeDef *k_pinfo;
+ HAL_StatusTypeDef status;
+
+ uint8_t data[10];
 
 
 
@@ -62,6 +66,8 @@ static void MX_USART2_UART_Init(void);
 void MX_USB_HOST_Process(void);
 
 /* USER CODE BEGIN PFP */
+
+
 
 /* USER CODE END PFP */
 
@@ -101,6 +107,8 @@ int main(void)
   MX_USB_HOST_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
+  initKeyboard(&huart2);
+
 
   /* USER CODE END 2 */
 
@@ -110,26 +118,39 @@ int main(void)
   {
     /* USER CODE END WHILE */
     MX_USB_HOST_Process();
-
-    /* USER CODE BEGIN 3 */
-    HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
-
-    HAL_Delay(300);
-    HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
-
-    HAL_Delay(300);
+    usb = USBH_HID_GetUSBDev();
 
 
+//Relative position reporting
+ /*
+  %111110xy         ; mouse position record flag
+                    ; where y is the right button state
+                    ; and x is the left button state
+X                   ; delta x as twos complement integer
+Y                   ; delta y as twos complement integer
+  */
 
 
- usb = USBH_HID_GetUSBDev();
-
- if (usb->keyboard!=NULL)
+ if (usb->mouse!=NULL)
  {
-	 k_pinfo = usb->keyboard;
+	 uint8_t mouse[3] = {0};
+	 mouse[0] = 0xF8;
+	 mouse[0]= mouse[0]|(usb->mouse->buttons[0]<<1);
+	 mouse[0]= mouse[0]|(usb->mouse->buttons[1]);
+	 mouse[1] = usb->mouse->x;
+	 mouse[2] = usb->mouse->y;
+
+	 HAL_UART_Transmit(&huart2, mouse, 3, 100);
+	 HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
  }
+
+
+ if(usb->keyboard!=NULL)
+ {
+	 processKbd(usb->keyboard,&huart2);
+	 HAL_GPIO_TogglePin(LED2_GPIO_Port, LED2_Pin);
+ }
+
 
 
 
@@ -137,6 +158,9 @@ int main(void)
   }
   /* USER CODE END 3 */
 }
+
+
+
 
 /**
   * @brief System Clock Configuration
@@ -210,7 +234,7 @@ static void MX_USART2_UART_Init(void)
 
   /* USER CODE END USART2_Init 1 */
   huart2.Instance = USART2;
-  huart2.Init.BaudRate = 7800;
+  huart2.Init.BaudRate = 7812;
   huart2.Init.WordLength = UART_WORDLENGTH_8B;
   huart2.Init.StopBits = UART_STOPBITS_1;
   huart2.Init.Parity = UART_PARITY_NONE;
