@@ -38,6 +38,7 @@
  HID_USBDevicesTypeDef* usb;
  HID_KEYBD_Info_TypeDef *k_pinfo;
  HAL_StatusTypeDef status;
+ uint8_t buffer[10]={0};
 
  //keyboard state
  uint8_t kb_reset = 0;
@@ -120,191 +121,73 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART2_UART_Init();
-  MX_USB_HOST_Init();
+//  MX_USB_HOST_Init();
   initKeyboard(&huart2);
 
 
   /* USER CODE BEGIN 2 */
 
-  uint8_t buffer[1]={0};
 
 
 
+ // HAL_UART_Receive_IT(&huart2, buffer, 1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /* USER CODE END WHILE */
-    MX_USB_HOST_Process();
-    usb = USBH_HID_GetUSBDev();
 
 
-//Relative position reporting
- /*
-  %111110xy         ; mouse position record flag
-                    ; where y is the right button state
-                    ; and x is the left button state
-X                   ; delta x as twos complement integer
-Y                   ; delta y as twos complement integer
-  */
-
-
- if (usb->mouse!=NULL && joy_inter_mode == 0)
- {
-	 uint8_t mouse[3] = {0};
-	 mouse[0] = 0xF8;
-	 mouse[0]= mouse[0]|(usb->mouse->buttons[0]<<1);
-	 mouse[0]= mouse[0]|(usb->mouse->buttons[1]);
-	 mouse[1] = usb->mouse->x;
-	 mouse[2] = usb->mouse->y;
-
-	 HAL_UART_Transmit(&huart2, mouse, 3, 100);
- }
-
-
- if(usb->keyboard!=NULL)
- {
-	 processKbd(usb->keyboard,&huart2);
- }
-
-
- if(usb->gamepad1!=NULL)
- {
-	 //set data for interrogation mode
-	 joydata1 = *usb->gamepad1;
-
-	 //send data for event mode
-	// if (joy_even_rpt==1)
-	 //{
-	 uint8_t joy1_package[3] = {0};
-	 joy1_package[0] = 0xFD;
-	 joy1_package[1] = joydata1;
-	 joy1_package[2] = joydata1;
-
-
-	 HAL_UART_Transmit(&huart2, joy1_package, 2, 5);
-	 //}
- }
-
- if(usb->gamepad2!=NULL)
- {
-	 //set data for interrogation mode
-	 joydata2 = *usb->gamepad2;
-
-	 //send data for event mode
-	 uint8_t joy2_package[2] = {0};
-
-		 joy2_package[0] = 0xFD;
-		 joy2_package[1] = joydata1&0x8F;
-
-		 HAL_UART_Transmit(&huart2, joy2_package, 2, 5);
-
- }
+	  MX_USB_HOST_Process();
 
 
 
-///  Handle keyboard inputs
-HAL_UART_Receive(&huart2,buffer, 1,0);
-
-
-if ((buffer[0]==0x01)&&(kb_reset==1))
-{
-	 kb_reset = 0;
-	 joy_inter_mode = 0;
-	 joy_even_rpt = 1;
-	 sendJoyData_flag = 0;
-	 joydata1 = 0;
-	 joydata2 = 0;
-
-
-	 HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
-	 HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
-}
-else
-{
-	kb_reset = 0;
-}
-
-if (buffer[0]==0x80)
-{
-	kb_reset =1;
-}
-
-//Set event reporting
-if (buffer[0]==0x14)
-{
-	joy_inter_mode = 0;
-	joy_even_rpt = 1;
-	HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
-}
-
-
-// set interrogation mode.
-if (buffer[0]==0x15)
-{
-	joy_inter_mode = 1;
-	joy_even_rpt = 0;
-	HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
-}
-
-//computer expects joystick interrogation report data
-if (buffer[0]==0x16)
-{
-	sendJoyData_flag = 1;
-}
-
-if(buffer[0]!=0x00)
-{
-	HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
-	}
-
-
-//Send joystick data in interrogation mode
-/*
-0xFD                ; joystick report header
-%x000yyyy           ; Joystick 0
-%x000yyyy           ; Joystick 1
-                    ; where x is the trigger
-                    ; and yyy is the stick position
-                    */
-
-						//RIGHT = (*joymap&0x1);
-    					//LEFT = (*joymap>>1&0x1);
-    					//UP = (*joymap>>3&0x1);
-    					//DOWN = (*joymap>>2&0x1);
-
-    					//BTN1 =  (*joymap>>6&0x1);
-    				    //BTN2 =  (*joymap>>5&0x1);
-    					//BTN3 =  (*joymap>>4&0x1);
-
-
-
-if (sendJoyData_flag == 1)
-{
-	//clear the flag
-	sendJoyData_flag = 0;
-
-	//construct message to send
-	uint8_t joy_package[3] = {0};
-
-	joy_package[0]=0xFD;
-	joy_package[1]= &joydata1; //8F mask clear additional buttons data
-	joy_package[2]= &joydata2; //8F mask clear additional buttons data
-
-	//HAL_UART_Transmit(&huart2, joy_package, 3, 5);
-
-}
-
-
-    buffer[0]=0;
   }
   /* USER CODE END 3 */
 
 
 }
 
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+  /* Prevent unused argument(s) compilation warning */
+  UNUSED(huart);
+
+
+  if (buffer[0]==0x16)
+  {
+	  HAL_GPIO_TogglePin(LED2_GPIO_Port, LED2_Pin);
+  }
+  HAL_UART_Receive_IT(&huart2, buffer, 1);
+}
+
+
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+  /* Prevent unused argument(s) compilation warning */
+	  if (huart->ErrorCode == HAL_UART_ERROR_ORE){
+
+
+	        // remove the error condition
+
+
+	        huart->ErrorCode = HAL_UART_ERROR_NONE;
+
+
+	        // set the correct state, so that the UART_RX_IT works correctly
+
+
+	        huart->gState = HAL_UART_STATE_BUSY_RX;
+
+
+	    }
+
+  /* NOTE : This function should not be modified, when the callback is needed,
+            the HAL_UART_ErrorCallback can be implemented in the user file.
+   */
+  HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
+}
 
 
 
