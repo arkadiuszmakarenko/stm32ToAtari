@@ -38,6 +38,7 @@
  HID_USBDevicesTypeDef* usb;
  HID_KEYBD_Info_TypeDef *k_pinfo;
  HAL_StatusTypeDef status;
+ uint8_t RxBuffer[1] = {0};
 
  //keyboard state
  uint8_t kb_reset = 0;
@@ -86,6 +87,57 @@ void MX_USB_HOST_Process(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+uint8_t MapJoystick(uint8_t joystick_data)
+{
+
+	  uint8_t joymapped = 0x00;
+
+	   	//Map any button to
+		   	//BTN0 = (joydata1>>7&0x1);
+		   	//BTN1 =  (joydata1>>6&0x1);
+		    //BTN2 =  (joydata1>>5&0x1);
+		   	//BTN3 =  (joydata1>>4&0x1);
+
+
+		   	//fire
+		   	if((joystick_data>>7&0x1)||(joystick_data>>6&0x1)||(joystick_data>>5&0x1)||(joystick_data>>4&0x1))
+		   			{
+		   				joymapped = joymapped|0x80;
+		   			}
+			//mask 0x01 up
+		   	//mask 0x02 down
+			//mask 0x04
+			//mask 0x08
+
+
+
+
+		   	//UP = (*joymap>>3&0x1);
+		   	if(joystick_data>>3&0x1)
+		   	{
+		   		joymapped = joymapped|0x01;
+		   	}
+
+		   	//DOWN = (*joymap>>2&0x1);
+		 	if(joystick_data>>2&0x1)
+			{
+		 		joymapped = joymapped|0x02;
+			}
+
+			//LEFT = (*joydata1>>1&0x1);
+			 	if(joystick_data>>1&0x1)
+			 			{
+			 				joymapped = joymapped|0x04;
+			 			}
+
+		 	////RIGHT = (*joydata1&0x1);
+
+		 	if(joystick_data&0x1)
+		 			{
+		 				joymapped = joymapped|0x08;
+		 			}
+		 	return joymapped;
+}
 
 
 /* USER CODE END 0 */
@@ -126,8 +178,9 @@ int main(void)
 
   /* USER CODE BEGIN 2 */
 
-  uint8_t buffer[1]={0};
-
+  HAL_UART_Receive_IT(&huart2, RxBuffer, 1);
+  HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
 
 
   /* USER CODE END 2 */
@@ -138,6 +191,7 @@ int main(void)
   {
     /* USER CODE END WHILE */
     MX_USB_HOST_Process();
+    HAL_UART_Receive_IT(&huart2, RxBuffer, 1);
     usb = USBH_HID_GetUSBDev();
 
 
@@ -166,9 +220,38 @@ Y                   ; delta y as twos complement integer
 
  if(usb->keyboard!=NULL)
  {
-	 processKbd(usb->keyboard,&huart2);
+	 processKbd(usb->keyboard);
  }
 
+ //handle even joy
+ if(usb!=NULL&&usb->gamepad1!=NULL)
+ {
+	 //set data for interrogation mode
+	 joydata1 = *usb->gamepad1;
+
+	 //send data for event mode
+	if (joy_even_rpt==1)
+	 {
+	 uint8_t joy1_package[3] = {0};
+	 joy1_package[0] = 0xFE;
+	 joy1_package[1] = MapJoystick(joydata1);
+	 	 HAL_UART_Transmit(&huart2, joy1_package, 2, 100);
+	 	 HAL_GPIO_TogglePin(LED2_GPIO_Port, LED2_Pin);
+	 }
+ }
+
+
+ //Handle interr gamepad
+
+ if (sendJoyData_flag == 1)
+ {
+ 	//clear the flag
+ 	sendJoyData_flag = 0;
+
+ 	//construct message to send
+
+
+ }
 
 
 
@@ -301,6 +384,104 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
+
+
+
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+  /* Prevent unused argument(s) compilation warning */
+	  if (huart->ErrorCode == HAL_UART_ERROR_ORE){
+
+
+	        // remove the error condition
+
+
+	        huart->ErrorCode = HAL_UART_ERROR_NONE;
+
+
+	        // set the correct state, so that the UART_RX_IT works correctly
+
+
+	        huart->gState = HAL_UART_STATE_BUSY_RX;
+
+
+	    }
+
+  /* NOTE : This function should not be modified, when the callback is needed,
+            the HAL_UART_ErrorCallback can be implemented in the user file.
+   */
+  HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin,GPIO_PIN_SET);
+
+}
+
+
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+  /* Prevent unused argument(s) compilation warning */
+  UNUSED(huart);
+
+  /* NOTE : This function should not be modified, when the callback is needed,
+            the HAL_UART_RxCpltCallback can be implemented in the user file
+   */
+
+  if ((RxBuffer[0]==0x01)&&(kb_reset==1))
+  {
+  	 kb_reset = 0;
+  	 joy_inter_mode = 0;
+  	 joy_even_rpt = 1;
+  	 sendJoyData_flag = 0;
+  	 joydata1 = 0;
+  	 joydata2 = 0;
+
+
+  	 HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
+  	 HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
+  }
+  else
+  {
+  	kb_reset = 0;
+  }
+
+  if (RxBuffer[0]==0x80)
+  {
+  	kb_reset =1;
+  }
+
+  //Set event reporting
+  if (RxBuffer[0]==0x14)
+  {
+  	joy_inter_mode = 0;
+  	joy_even_rpt = 1;
+
+  }
+
+
+  // set interrogation mode.
+  if (RxBuffer[0]==0x15)
+  {
+	HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
+  	joy_inter_mode = 1;
+  	joy_even_rpt = 0;
+  }
+
+
+  if (RxBuffer[0]==0x16)
+   {
+	  uint8_t joy_package[3] = {0};
+
+	   	joy_package[0]=0xFD;
+	   	joy_package[1]= MapJoystick(joydata2);
+	   	joy_package[2]= MapJoystick(joydata1);
+	   	HAL_UART_Transmit(&huart2, joy_package, 3, 100);
+   }
+
+
+
+  //
+
+
+}
 /* USER CODE END 4 */
 
 /**
